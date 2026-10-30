@@ -1,0 +1,99 @@
+name: "Deploy Backend"
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: robinsoft
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEPLOY_SSH_TARGET: ${{ secrets.DEPLOY_SSH_TARGET }}
+      DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+      DEPLOY_APPSETTINGS_PATH: ${{ secrets.DEPLOY_APPSETTINGS_PATH }}
+    steps:
+      - name: Checkout the project
+        uses: https://gitea.com/actions/checkout@v6
+
+      - name: Validate deployment configuration and tag
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          for tool in dotnet tar ssh ssh-keygen; do command -v "$tool" >/dev/null; done
+          [[ "$RELEASE_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$ ]] || { echo 'Expected a v-prefixed semantic version tag' >&2; exit 1; }
+          VERSION="${BASH_REMATCH[1]}"
+          [[ "$DEPLOY_SSH_TARGET" =~ ^[a-z_][a-z0-9_-]*@[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] || { echo 'Set DEPLOY_SSH_TARGET to a verified user@hostname' >&2; exit 1; }
+          [[ -n "$DEPLOY_SSH_KNOWN_HOSTS" ]] || { echo 'Set DEPLOY_SSH_KNOWN_HOSTS to independently verified host keys' >&2; exit 1; }
+          [[ "$DEPLOY_APPSETTINGS_PATH" =~ ^/([a-zA-Z0-9_.-]+/)*appsettings\.json$ ]] || { echo 'Set DEPLOY_APPSETTINGS_PATH to the verified absolute remote appsettings.json path' >&2; exit 1; }
+          test -f src/Symposium.Api.Server/Symposium.Api.Server.csproj
+          test -f tests/Symposium.Tests/Symposium.Tests.csproj
+          test -f tests/ArticleCompatibility/ArticleCompatibility.csproj
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore solution and local tools
+        run: |
+          set -euo pipefail
+          dotnet restore Symposium.slnx
+          dotnet tool restore
+
+      - name: Test solution
+        run: |
+          set -euo pipefail
+          bash -n scripts/release.sh
+          dotnet test Symposium.slnx -c Release --no-restore
+
+      - name: Test article compatibility
+        run: |
+          set -euo pipefail
+          dotnet run --project tests/ArticleCompatibility/ArticleCompatibility.csproj -c Release
+
+      - name: Publish backend
+        run: |
+          set -euo pipefail
+          dotnet publish src/Symposium.Api.Server/Symposium.Api.Server.csproj \
+            /p:UseSharedCompilation=false \
+            -c Release \
+            --self-contained \
+            -r linux-x64 \
+            -o ./build \
+            -p:Version="$VERSION" \
+            -p:PackageVersion="$VERSION"
+          test -s build/Symposium.Api.Server.dll
+          test -x build/Symposium.Api.Server
+          test -s build/Symposium.Api.Server.runtimeconfig.json
+          COMMIT="$(git rev-parse HEAD)"
+          printf '{"version":"%s","tag":"v%s","commit":"%s"}\n' "$VERSION" "$VERSION" "$COMMIT" > build/version.json
+          test -s build/version.json
+
+      - name: Generate review-only EF migration script
+        if: ${{ vars.GENERATE_EF_SCRIPT == 'true' }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/migration-review
+          database='Host=127.0.0.1;Port=1;Database=symposium_design;Username=design;Timeout=1' \
+            dotnet ef migrations script --idempotent \
+            --project src/Symposium.Storage/Symposium.Storage.csproj \
+            --startup-project src/Symposium.Storage/Symposium.Storage.csproj \
+            --context AppDbContext \
+            --configuration Release \
+            --output build/migration-review/idempotent.sql
+          test -s build/migration-review/idempotent.sql
+
+      - name: Deploy backend
+        run: |
+          set -euo pipefail
+          known_hosts="$(mktemp)"
+          trap 'rm -f "$known_hosts"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > "$known_hosts"
+          ssh-keygen -F "${DEPLOY_SSH_TARGET#*@}" -f "$known_hosts" >/dev/null
+          ssh_options=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known_hosts" -o ConnectTimeout=15)
+          ssh "${ssh_options[@]}" "$DEPLOY_SSH_TARGET" "command -v deploy-app >/dev/null && test -r '$DEPLOY_APPSETTINGS_PATH' && test -s '$DEPLOY_APPSETTINGS_PATH'"
+          tar --exclude='appsettings*.json' -cf - -C ./build . | ssh "${ssh_options[@]}" "$DEPLOY_SSH_TARGET" "deploy-app app '$VERSION' backend appsettings.json"
+
+      - name: Create release
+        uses: https://gitea.com/actions/gitea-release-action@v1

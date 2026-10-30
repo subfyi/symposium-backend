@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Symposium.Api.Server/Symposium.Api.Server.csproj" />
+    <Project Path="src/Symposium.Models/Symposium.Models.csproj" />
+    <Project Path="src/Symposium.Query.Projections/Symposium.Query.Projections.csproj" />
+    <Project Path="src/Symposium.Services/Symposium.Services.csproj" />
+    <Project Path="src/Symposium.Storage/Symposium.Storage.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Symposium.Tests/Symposium.Tests.csproj" />
+  </Folder>
+</Solution>

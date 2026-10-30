@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+        <PackageReference Include="JustAuthenticator" Version="0.7.0" />
+        <PackageReference Include="JustScheduler" Version="0.6.0" />
+        <PackageReference Include="LinqKit.Microsoft.EntityFrameworkCore" Version="10.0.11" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.8" />
+        <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
+        <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+        <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.1" />
+        <PackageReference Include="Tamturk.AspNetCore.RequestSigning" Version="2.3.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Symposium.Models\Symposium.Models.csproj" />
+        <ProjectReference Include="..\Symposium.Query.Projections\Symposium.Query.Projections.csproj" />
+        <ProjectReference Include="..\Symposium.Services\Symposium.Services.csproj" />
+        <ProjectReference Include="..\Symposium.Storage\Symposium.Storage.csproj" />
+    </ItemGroup>
+
+</Project>
